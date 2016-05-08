@@ -1,12 +1,16 @@
-# Extract binary information for the Epiphany
+# Extract information from Epiphany binaries
 
-This program is a tool that extracts information on code placement and binary size for Epiphany coprocessor binaries. It is similar to `readelf` and `objdump` but it is tailored to the Epiphany platform because it makes a distinction between local memory and external memory and will show the size of every C function in the binary. This allows the user to find which functions might be too large to store in local memory.  Issue `$ make` from the command-line to build the tool. Issue
+This program is a tool that extracts information on code placement and binary size for Epiphany coprocessor binaries. It allows the user to find which parts of the code take up precious local memory on the Epiphany chip. It is similar to `readelf` and `objdump` but it is tailored to the Epiphany platform because it makes a distinction between local memory and external memory.
+
+Issue `$ make` from the command-line to build the tool. Issue
 
     epiphany-bin-info -h
 
 for information on how to use the tool.
 
 ### Example output
+
+Note that the actual output in a terminal uses colors to highlight large symbols.
 
 	$ ./epiphany-bin-info e_memorybench.elf 
 	Total size in local memory:    0x00003854 = 14 KB
