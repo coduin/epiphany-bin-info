@@ -1,11 +1,12 @@
-#include <fstream>
-#include <iostream>
-#include <iomanip>
 #include <algorithm>
+#include <cstring>
+#include <cxxabi.h>
+#include <elf.h>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
 #include <string>
 #include <vector>
-#include <cstring>
-#include <elf.h>
 
 #include <unistd.h> //for color output
 
@@ -15,6 +16,7 @@ bool colorOutput = false;
 bool showProgramHeaders = false;
 bool showSections = false;
 bool showSymbols = false;
+bool demangleNames = true;
 
 // Check if an address belongs to external memory
 bool isExtmem(int x) { return (x >> 20) != 0; }
@@ -48,12 +50,12 @@ class ashex {
 
 class addr {
   public:
-    addr(unsigned p) : val(p) {};
+    addr(unsigned p) : val(p){};
     ~addr(){};
     unsigned val;
 };
 
-ostream& operator<< (ostream& stream, const ashex& rhs) {
+ostream& operator<<(ostream& stream, const ashex& rhs) {
     return stream << "0x" << setfill('0') << hex << setw(8) << rhs.val << dec;
 }
 
@@ -66,6 +68,23 @@ ostream& operator<<(ostream& stream, const addr& addr) {
         stream << ashex(addr.val);
     }
     return stream;
+}
+
+string demangle(const string& name) {
+    string ret;
+    int status;
+    char* realname = 0;
+
+    realname = abi::__cxa_demangle(name.c_str(), 0, 0, &status);
+
+    if (status == 0)
+        ret = realname;
+    else
+        ret = name;
+
+    if (realname)
+        free(realname);
+    return ret;
 }
 
 // Check if a file header corresponds to the Epiphany ELF file format
@@ -86,10 +105,10 @@ void parseProgramHeader(Elf32_Phdr* phdr, size_t count) {
             localsize += phdr[ihdr].p_memsz;
     }
 
-    cout << "Total size in local memory:    " << ashex(localsize)
-         << " = " << localsize / 1024 << " KB" << endl;
-    cout << "Total size in external memory: " << ashex(extmemsize)
-         << " = " << extmemsize / 1024 << " KB" << endl;
+    cout << "Total size in local memory:    " << ashex(localsize) << " = "
+         << localsize / 1024 << " KB" << endl;
+    cout << "Total size in external memory: " << ashex(extmemsize) << " = "
+         << extmemsize / 1024 << " KB" << endl;
 
     if (showProgramHeaders) {
         cout << "\nProgram header table (runtime info):\n";
@@ -103,7 +122,8 @@ void parseProgramHeader(Elf32_Phdr* phdr, size_t count) {
         }
     }
 }
-void parseSections(Elf32_Shdr* shdr, size_t count, const char* strtab, size_t strsize) {
+void parseSections(Elf32_Shdr* shdr, size_t count, const char* strtab,
+                   size_t strsize) {
     if (showSections) {
         cout << "\nSection table (linker info):\n";
         cout << "ADDR        SIZE        NAME\n";
@@ -160,6 +180,9 @@ void parseSymbolTable(Elf32_Sym* symbol, size_t count, const char* symstr,
             sym.name = ((char*)(&symstr[symbol[i].st_name]));
         else
             sym.name.clear();
+
+        if (demangleNames)
+            sym.name = demangle(sym.name);
 
         symbols.push_back(sym);
     }
@@ -299,15 +322,18 @@ bool cmdOptionExists(char** begin, char** end, const std::string& option) {
 }
 
 void showHelp(char* cmd) {
-    cout << "Usage: " << cmd << " [-h] [-p] [-sec] [-s] [-a] file\n";
+    cout << "Usage: " << cmd
+         << " [-h] [-p] [-sec] [-s] [-a] [--nodemangle] file\n";
     cout << "Options:\n";
-    cout << "    -h   Show this help.\n";
-    cout << "    -p   Show program headers (runtime information).\n";
-    cout << "    -sec Show section headers (linking information).\n";
-    cout << "         Sections stored in external memory are highlighted.\n";
-    cout << "    -s   Show symbols (function names).\n";
-    cout << "         Symbols are sorted by address.\n";
-    cout << "    -a   Show all.\n";
+    cout << "    -h             Show this help.\n";
+    cout << "    -p             Show program headers (runtime information).\n";
+    cout << "    -sec           Show section headers (linking information).\n";
+    cout << "                   Sections stored in external memory are "
+            "highlighted.\n";
+    cout << "    -s             Show symbols (function names).\n";
+    cout << "                   Symbols are sorted by address.\n";
+    cout << "    -a             Show all.\n";
+    cout << "    --nodemangle   Do not demangle C++ symbol names.\n";
     cout << "  By default, only the total program size in local and external "
             "memory is shown."
          << endl;
@@ -338,6 +364,10 @@ int main(int argc, char* argv[]) {
         showProgramHeaders = true;
         showSections = true;
         showSymbols = true;
+    }
+
+    if (cmdOptionExists(argv, argv + argc, "--nodemangle")) {
+        demangleNames = false;
     }
 
     if (isatty(fileno(stdout)))
